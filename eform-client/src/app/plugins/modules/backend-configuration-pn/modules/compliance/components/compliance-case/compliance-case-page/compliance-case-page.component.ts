@@ -113,10 +113,10 @@ export class ComplianceCasePageComponent implements OnInit {
       .subscribe((operation) => {
         if (operation && operation.success) {
           this.replyElement = new ReplyElementDto();
-          const route = this.reverseRoute.endsWith('/') ? this.reverseRoute.slice(0, -1) : this.reverseRoute;
-          this.router.navigate([route], {
-            queryParams: { highlightId: this.id }
-          }).then();
+          this.router.navigate([this.reverseRoute]).then();
+          // this.router.navigateByUrl(
+          //   `${this.reverseRoute}`
+          // ).then();
         }
       });
   }

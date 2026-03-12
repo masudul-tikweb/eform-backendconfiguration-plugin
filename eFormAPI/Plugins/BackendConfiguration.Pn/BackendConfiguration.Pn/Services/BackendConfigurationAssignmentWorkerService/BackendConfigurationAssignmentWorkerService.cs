@@ -353,6 +353,7 @@ public class BackendConfigurationAssignmentWorkerService(
             var core = await coreHelper.GetCore().ConfigureAwait(false);
             var sdkDbContext = core.DbContextHelper.GetDbContext();
             var sitesQuery = from site in sdkDbContext.Sites
+                join siteTag in sdkDbContext.SiteTags on site.Id equals siteTag.SiteId into siteTags
                 join siteWorker in sdkDbContext.SiteWorkers on site.Id equals siteWorker.SiteId
                 join worker in sdkDbContext.Workers on siteWorker.WorkerId equals worker.Id
                 select new
@@ -384,6 +385,12 @@ public class BackendConfigurationAssignmentWorkerService(
             sitesQuery = sitesQuery
                 .Where(x => x.Resigned == requestModel.ShowResigned)
                 .Where(x => x.WorkflowState != Constants.WorkflowStates.Removed);
+
+            if (requestModel.TagIds != null && requestModel.TagIds.Count > 0)
+            {
+                sitesQuery = sitesQuery
+                    .Where(x => x.SiteTags.Any(y => requestModel.TagIds.Contains(y)));
+            }
 
             var deviceUsers = await sitesQuery
                 .Select(x => new DeviceUserModel
@@ -457,6 +464,22 @@ public class BackendConfigurationAssignmentWorkerService(
                     deviceUserModel.EndSunday = assignedSite.EndSunday;
                     deviceUserModel.BreakSunday = assignedSite.BreakSunday;
                     deviceUserModel.EnableMobileAccess = assignedSite.EnableMobileAccess;
+                    // Time registration specific settings
+                    deviceUserModel.UseGoogleSheetAsDefault = assignedSite.UseGoogleSheetAsDefault;
+                    deviceUserModel.UseOnlyPlanHours = assignedSite.UseOnlyPlanHours;
+                    deviceUserModel.AutoBreakCalculationActive = assignedSite.AutoBreakCalculationActive;
+                    deviceUserModel.AllowPersonalTimeRegistration = assignedSite.AllowPersonalTimeRegistration;
+                    deviceUserModel.AllowEditOfRegistrations = assignedSite.AllowEditOfRegistrations;
+                    deviceUserModel.UsePunchClock = assignedSite.UsePunchClock;
+                    deviceUserModel.UsePunchClockWithAllowRegisteringInHistory = assignedSite.UsePunchClockWithAllowRegisteringInHistory;
+                    deviceUserModel.AllowAcceptOfPlannedHours = assignedSite.AllowAcceptOfPlannedHours;
+                    deviceUserModel.DaysBackInTimeAllowedEditingEnabled = assignedSite.DaysBackInTimeAllowedEditingEnabled;
+                    deviceUserModel.DaysBackInTimeAllowedEditing = assignedSite.DaysBackInTimeAllowedEditing;
+                    deviceUserModel.ThirdShiftActive = assignedSite.ThirdShiftActive;
+                    deviceUserModel.FourthShiftActive = assignedSite.FourthShiftActive;
+                    deviceUserModel.FifthShiftActive = assignedSite.FifthShiftActive;
+                    deviceUserModel.IsManager = assignedSite.IsManager;
+                    // deviceUserModel.ManagingTagIds = assignedSite.ManagingTagIds ?? []; // TODO: Handle ManagingTagIds separately
                 }
 
                 deviceUserModel.TaskManagementEnabled = backendConfigurationPnDbContext.PropertyWorkers.Any(x =>
@@ -508,15 +531,16 @@ public class BackendConfigurationAssignmentWorkerService(
 
                 deviceUserModel.IsLocked = deviceUserModel.IsLocked ? deviceUserModel.IsLocked : numberOfAssignements > 0;
 
-                var numberOfWorkOrderCases = await backendConfigurationPnDbContext.WorkorderCases
+                var workOrderCases = await backendConfigurationPnDbContext.WorkorderCases
                     .Where(x => x.WorkflowState != Constants.WorkflowStates.Removed)
                     .Where(x => x.CaseStatusesEnum != CaseStatusesEnum.Completed)
                     .Where(x => x.LeadingCase == true)
                     .Where(x => x.LastAssignedToName == deviceUserModel.SiteName)
-                    .CountAsync();
+                    .ToListAsync();
 
-                deviceUserModel.IsLocked = deviceUserModel.IsLocked ? deviceUserModel.IsLocked : numberOfWorkOrderCases > 0;
-                deviceUserModel.HasWorkOrdersAssigned = numberOfWorkOrderCases > 0;
+                deviceUserModel.IsLocked = deviceUserModel.IsLocked ? deviceUserModel.IsLocked : workOrderCases.Count > 0;
+                deviceUserModel.WorkOrderCases = workOrderCases;
+                deviceUserModel.HasWorkOrdersAssigned = workOrderCases.Count > 0;
             }
 
             if (requestModel.PropertyIds != null)
